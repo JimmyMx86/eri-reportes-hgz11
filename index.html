@@ -847,47 +847,39 @@
         </div>
         <div class="code-block" id="apps-script-code">const SHEET_NAME = 'Hoja1';
 
-function doPost(e) {
+function doGet(e) {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = ss.getSheetByName(SHEET_NAME);
-    const data = JSON.parse(e.postData.contents);
+    const p = e.parameter;
     sheet.appendRow([
-      data.folio,
-      data.fecha,
-      data.hora,
-      data.tipo,
-      data.paciente,
-      data.nss,
-      data.cama,
-      data.umf,
-      data.edad,
-      data.medico,
-      data.residente,
-      data.ta,
-      data.fc,
-      data.fr,
-      data.temp,
-      data.sato2,
-      data.diagnosticos,
-      data.exploracion,
-      data.labs,
-      data.plan,
-      data.estado,
-      data.reporte
+      p.folio, p.fecha, p.hora, p.tipo,
+      p.paciente, p.nss, p.cama, p.umf, p.edad,
+      p.medico, p.residente,
+      p.ta, p.fc, p.fr, p.temp, p.sato2,
+      p.diagnosticos, p.exploracion, p.labs, p.plan,
+      p.estado, p.reporte
     ]);
-    return ContentService.createTextOutput(
-      JSON.stringify({ok: true})
-    ).setMimeType(ContentService.MimeType.JSON);
+    const result = JSON.stringify({ok: true});
+    const cb = p.callback;
+    if (cb) {
+      return ContentService.createTextOutput(cb + '(' + result + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return ContentService.createTextOutput(result)
+      .setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
-    return ContentService.createTextOutput(
-      JSON.stringify({ok: false, error: err.toString()})
-    ).setMimeType(ContentService.MimeType.JSON);
+    const result = JSON.stringify({ok: false, error: err.toString()});
+    const cb = e.parameter.callback;
+    if (cb) {
+      return ContentService.createTextOutput(cb + '(' + result + ')')
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+    return ContentService.createTextOutput(result)
+      .setMimeType(ContentService.MimeType.JSON);
   }
 }
-
-function doGet(e) {
-  return ContentService.createTextOutput('ERI HGZ 11 OK');
+  } catch(err) {
 }</div>
         <button class="btn btn-secondary" onclick="copiarScript()" style="margin-top:8px; font-size:13px; padding:8px 14px;">📋 Copiar código</button>
       </div>
@@ -929,23 +921,6 @@ function doGet(e) {
         💾 Guardar configuración
       </button>
       <div style="margin-top:10px; font-size:12px; color:var(--gray-400); text-align:center;" id="cfg-status"></div>
-    </div>
-
-    <!-- CHANGE PASSWORD -->
-    <div class="card" style="margin-top:0;">
-      <div class="card-title">Cambiar contraseña</div>
-      <div class="field-grid field-grid-2" style="gap:10px;">
-        <div class="field">
-          <label>Nueva contraseña</label>
-          <input type="password" id="cfg-pwd-new" placeholder=""/>
-        </div>
-        <div class="field">
-          <label>Confirmar</label>
-          <input type="password" id="cfg-pwd-confirm" placeholder=""/>
-        </div>
-      </div>
-      <button class="btn btn-secondary" onclick="cambiarPassword()" style="margin-top:10px; font-size:13px;">🔑 Guardar nueva contraseña</button>
-      <div id="pwd-status" style="font-size:12px; color:var(--gray-400); margin-top:8px; text-align:center;"></div>
     </div>
 
     </div><!-- /config-content -->
@@ -1057,20 +1032,6 @@ async function verificarPassword() {
   }
 }
 
-async function cambiarPassword() {
-  const nueva = document.getElementById('cfg-pwd-new').value;
-  const confirma = document.getElementById('cfg-pwd-confirm').value;
-  const status = document.getElementById('pwd-status');
-  if (!nueva || nueva.length < 4) { status.textContent = '⚠️ Mínimo 4 caracteres'; status.style.color = 'var(--accent)'; return; }
-  if (nueva !== confirma) { status.textContent = '⚠️ Las contraseñas no coinciden'; status.style.color = 'var(--accent)'; return; }
-  const hash = await hashStr(nueva);
-  localStorage.setItem('eri_pwd_hash', hash);
-  document.getElementById('cfg-pwd-new').value = '';
-  document.getElementById('cfg-pwd-confirm').value = '';
-  status.textContent = '✅ Contraseña actualizada';
-  status.style.color = 'var(--imss-green)';
-  toast('🔑 Contraseña actualizada', 'success');
-}
 
 // ===================== TIPO =====================
 function setTipo(tipo, btn) {
@@ -1320,17 +1281,68 @@ async function guardarEnSheets() {
   document.getElementById('sheets-status').textContent = '⏳ Guardando en Google Sheets...';
 
   try {
-    const resp = await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ultimoReporte)
+    // Construir params — truncar campos largos para no exceder límite de URL
+    const r = ultimoReporte;
+    const params = new URLSearchParams({
+      folio:        r.folio || '',
+      fecha:        r.fecha || '',
+      hora:         r.hora || '',
+      tipo:         r.tipo || '',
+      paciente:     r.paciente || '',
+      nss:          r.nss || '',
+      cama:         r.cama || '',
+      umf:          r.umf || '',
+      edad:         r.edad || '',
+      medico:       r.medico || '',
+      residente:    r.residente || '',
+      ta:           r.ta || '',
+      fc:           r.fc || '',
+      fr:           r.fr || '',
+      temp:         r.temp || '',
+      sato2:        r.sato2 || '',
+      diagnosticos: (r.diagnosticos || '').slice(0, 500),
+      exploracion:  (r.exploracion || '').slice(0, 500),
+      labs:         (r.labs || '').slice(0, 400),
+      plan:         (r.plan || '').slice(0, 400),
+      estado:       r.estado || '',
+      reporte:      (r.reporte || '').slice(0, 800)
     });
-    // no-cors: no podemos leer la respuesta, asumimos éxito
-    document.getElementById('sheets-status').textContent = '✅ Guardado en Google Sheets correctamente';
-    toast('📊 Guardado en Sheets', 'success');
+
+    // Usar script tag — única técnica que evita CORS con Apps Script doGet
+    const scriptEl = document.createElement('script');
+    const cbName = 'gsCallback_' + Date.now();
+    window[cbName] = function(resp) {
+      delete window[cbName];
+      scriptEl.remove();
+      if (resp && resp.ok) {
+        document.getElementById('sheets-status').textContent = '✅ Guardado en Google Sheets correctamente';
+        toast('📊 Guardado en Sheets', 'success');
+      } else {
+        document.getElementById('sheets-status').textContent = '❌ Error: ' + (resp ? resp.error : 'sin respuesta');
+        toast('Error al guardar en Sheets', 'error');
+      }
+    };
+    params.append('callback', cbName);
+    scriptEl.src = url + '?' + params.toString();
+    scriptEl.onerror = () => {
+      delete window[cbName];
+      document.getElementById('sheets-status').textContent = '❌ No se pudo conectar. Verifica la URL.';
+      toast('Error de conexión con Sheets', 'error');
+    };
+    document.body.appendChild(scriptEl);
+
+    // Timeout por si no responde
+    setTimeout(() => {
+      if (window[cbName]) {
+        delete window[cbName];
+        scriptEl.remove();
+        document.getElementById('sheets-status').textContent = '⚠️ Sin respuesta — verifica en tu hoja si se guardó';
+        toast('Sin respuesta de Sheets', 'info');
+      }
+    }, 8000);
+
   } catch(err) {
-    document.getElementById('sheets-status').textContent = '❌ Error al guardar. Verifica la URL en Configuración.';
+    document.getElementById('sheets-status').textContent = '❌ Error: ' + err.message;
     toast('Error al guardar en Sheets', 'error');
   }
 }
