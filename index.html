@@ -957,7 +957,7 @@ function doGet(e) {
 // ===================== STATE =====================
 let tipoActual = 'cs';
 let historial = [];
-let config = { sheetsUrl: '', medico: '', turno: 'Nocturno' };
+let config = { sheetsUrl: 'https://script.google.com/macros/s/AKfycbxu-bBSXqXxxdb2lns2NEi81TeaYDJjJvfhK48b80qNsJU6PdbUvAz1lON45arl2ycr/exec', medico: '', turno: 'Nocturno' };
 let ultimoReporte = null;
 
 // ===================== FOLIO =====================
@@ -1307,13 +1307,8 @@ async function copiarTexto() {
 
 // ===================== GOOGLE SHEETS =====================
 async function guardarEnSheets() {
-  const url = document.getElementById('cfg-sheets-url').value?.trim() || config.sheetsUrl;
-  if (!url) {
-    toast('⚙️ Configura la URL de Google Sheets primero', 'error');
-    switchTab('config'); document.querySelectorAll('.tab-btn')[2].classList.add('active');
-    document.querySelectorAll('.tab-btn')[0].classList.remove('active');
-    return;
-  }
+  const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxu-bBSXqXxxdb2lns2NEi81TeaYDJjJvfhK48b80qNsJU6PdbUvAz1lON45arl2ycr/exec';
+  const url = document.getElementById('cfg-sheets-url').value?.trim() || config.sheetsUrl || APPS_SCRIPT_URL;
   if (!ultimoReporte) { toast('Genera un reporte primero', 'error'); return; }
 
   document.getElementById('sheets-status').textContent = '⏳ Guardando en Google Sheets...';
