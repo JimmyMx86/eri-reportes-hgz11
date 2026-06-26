@@ -634,6 +634,10 @@
           <input type="text" id="f-folio" readonly style="background:var(--gray-100); color:var(--imss-blue-dark); font-weight:700; cursor:default;"/>
         </div>
         <div class="field">
+          <label>Hora de activacion</label>
+          <input type="time" id="f-hora-activacion" style="font-size:15px;"/>
+        </div>
+        <div class="field">
           <label>NSS</label>
           <input type="text" id="f-nss" placeholder="" inputmode="numeric"/>
         </div>
@@ -661,6 +665,22 @@
           <label>Residente / Interno</label>
           <input type="text" id="f-residente" placeholder="" autocapitalize="words"/>
         </div>
+        <div class="field">
+          <label>FUM</label>
+          <input type="text" id="f-fum" placeholder="" inputmode="text"/>
+        </div>
+        <div class="field">
+          <label>Fecha probable de parto</label>
+          <input type="text" id="f-fpp" placeholder="" inputmode="text"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- Antecedentes relevantes -->
+    <div class="card">
+      <div class="card-title">Antecedentes relevantes</div>
+      <div class="field">
+        <textarea id="f-antecedentes" rows="3" placeholder=""></textarea>
       </div>
     </div>
 
@@ -834,7 +854,7 @@
         <div class="step-list">
           <div class="step-item">Ve a <strong>sheets.google.com</strong> y crea una hoja nueva. Nómbrala <strong>"ERI HGZ 11 Reportes"</strong>.</div>
           <div class="step-item">En la primera fila pon estos encabezados en orden:<br>
-            <code>Folio | Fecha | Hora | Tipo | Paciente | NSS | Cama | UMF | Edad | Médico | Residente | TA | FC | FR | Temp | SatO2 | Diagnósticos | Exploración | Labs | Plan | Estado | Reporte completo</code>
+            <code>Folio | Fecha | Hora | Hora Activacion | Tipo | Paciente | NSS | Cama | UMF | Edad | FUM | FPP | Antecedentes | Médico | Residente | TA | FC | FR | Temp | SatO2 | Diagnósticos | Exploración | Labs | Plan | Estado | Reporte completo</code>
           </div>
         </div>
       </div>
@@ -853,8 +873,9 @@ function doGet(e) {
     const sheet = ss.getSheetByName(SHEET_NAME);
     const p = e.parameter;
     sheet.appendRow([
-      p.folio, p.fecha, p.hora, p.tipo,
+      p.folio, p.fecha, p.hora, p.horaActivacion, p.tipo,
       p.paciente, p.nss, p.cama, p.umf, p.edad,
+      p.fum, p.fpp, p.antecedentes,
       p.medico, p.residente,
       p.ta, p.fc, p.fr, p.temp, p.sato2,
       p.diagnosticos, p.exploracion, p.labs, p.plan,
@@ -998,7 +1019,7 @@ function switchTab(tab) {
 }
 
 // ===================== PASSWORD =====================
-const DEFAULT_PWD_HASH = '8a9a4a7f2b1d3c6e'; // hash simple de "IMSS2024"
+const DEFAULT_PWD_HASH = '5ce0148ad9aca700'; // IMSS2024
 
 async function hashStr(str) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
@@ -1006,7 +1027,13 @@ async function hashStr(str) {
 }
 
 function getStoredHash() {
-  return localStorage.getItem('eri_pwd_hash') || DEFAULT_PWD_HASH;
+  const stored = localStorage.getItem('eri_pwd_hash');
+  // Limpiar hash viejo incorrecto
+  if (stored === '8a9a4a7f2b1d3c6e') {
+    localStorage.removeItem('eri_pwd_hash');
+    return DEFAULT_PWD_HASH;
+  }
+  return stored || DEFAULT_PWD_HASH;
 }
 
 function lockConfig() {
@@ -1095,9 +1122,13 @@ function generarReporte() {
   const cama      = v('f-cama').toUpperCase();
   const umf       = v('f-umf');
   const edad      = v('f-edad');
-  const medicoRep = v('f-medico');
-  const residente = v('f-residente');
-  const folio     = confirmarFolio();
+  const medicoRep    = v('f-medico');
+  const residente    = v('f-residente');
+  const fum          = v('f-fum');
+  const fpp          = v('f-fpp');
+  const antecedentes = v('f-antecedentes');
+  const horaAct      = v('f-hora-activacion');
+  const folio        = confirmarFolio();
   const sv     = buildSV();
   const dx     = buildDx(v('f-dx'));
   const evol   = v('f-evolucion');
@@ -1117,8 +1148,10 @@ function generarReporte() {
   let lineas = [];
 
   const encabezado = () => {
-    lineas.push(`*ERI HGZ No. 11* — ${fecha} ${hora} h`);
+    lineas.push(`*ERI HGZ No. 11* — ${fecha}`);
     lineas.push(`Folio: *${folio}*${tipoCfg ? '  |  Turno ' + tipoCfg : ''}`);
+    if (horaAct) lineas.push(`Hora de activacion: ${horaAct} h`);
+    lineas.push(`Hora de reporte: ${hora} h`);
     lineas.push('');
   };
 
@@ -1127,51 +1160,54 @@ function generarReporte() {
     const meta = [nss, exp, cama, umf].filter(Boolean).join('  ·  ');
     if (meta) lineas.push(meta);
     if (edad) lineas.push(edad);
-    if (medicoRep) lineas.push(`👨‍⚕️ *Médico:* ${medicoRep}`);
-    if (residente) lineas.push(`🩺 *Residente/Interno:* ${residente}`);
+    if (fum) lineas.push(`FUM: ${fum}`);
+    if (fpp) lineas.push(`FPP: ${fpp}`);
     lineas.push('');
   };
 
   const blqSV = () => {
-    if (sv) { lineas.push(`📊 *Signos vitales:*  ${sv}`); lineas.push(''); }
+    if (sv) { lineas.push(`*Signos vitales:*  ${sv}`); lineas.push(''); }
   };
 
   const blqDx = () => {
     if (dx) {
-      lineas.push('📋 *Diagnósticos:*');
+      lineas.push('*Diagnosticos:*');
       lineas.push(dx);
       lineas.push('');
     }
   };
 
   const blqExpl = () => {
-    if (expl) { lineas.push('🔍 *Exploración:*'); lineas.push(expl); lineas.push(''); }
+    if (expl) { lineas.push('*Exploracion:*'); lineas.push(expl); lineas.push(''); }
   };
 
   const blqLabs = () => {
-    if (labs) { lineas.push('🧪 *Laboratorios / Gabinete:*'); lineas.push(labs); lineas.push(''); }
+    if (labs) { lineas.push('*Laboratorios / Gabinete:*'); lineas.push(labs); lineas.push(''); }
   };
 
   const blqPlan = () => {
-    if (plan) { lineas.push('📌 *Plan:*'); lineas.push(plan); lineas.push(''); }
+    if (plan) { lineas.push('*Plan:*'); lineas.push(plan); lineas.push(''); }
+  };
+
+  const blqAntecedentes = () => {
+    if (antecedentes) { lineas.push('*Antecedentes relevantes:*'); lineas.push(antecedentes); lineas.push(''); }
   };
 
   const blqEstado = () => {
-    const iconos = { Estable: '🟢', Delicado: '🟡', Grave: '🟠', Crítico: '🔴' };
-    const icono = iconos[estadoVal] || '⚪';
-    lineas.push(`${icono} *Estado de salud: ${estadoVal.toUpperCase()}*`);
+    lineas.push(`*Estado de salud: ${estadoVal.toUpperCase()}*`);
     if (pronostico) lineas.push(pronostico);
     lineas.push('');
   };
 
   if (tipo === 'cs') {
     encabezado();
-    lineas.push(`🔴 *CÓDIGO ERIO — CASO NUEVO*`);
+    lineas.push('*CODIGO ERIO — CASO NUEVO*');
     lineas.push('');
     blqPaciente();
+    blqAntecedentes();
     blqSV();
     blqDx();
-    if (evol) { lineas.push('🗣 *Subjetivo:*'); lineas.push(evol); lineas.push(''); }
+    if (evol) { lineas.push('*Subjetivo:*'); lineas.push(evol); lineas.push(''); }
     blqExpl();
     blqLabs();
     blqPlan();
@@ -1179,11 +1215,12 @@ function generarReporte() {
 
   } else if (tipo === 'seguimiento') {
     encabezado();
-    lineas.push(`📊 *SEGUIMIENTO*`);
+    lineas.push('*SEGUIMIENTO*');
     lineas.push('');
     blqPaciente();
+    blqAntecedentes();
     blqSV();
-    if (evol) { lineas.push('🗣 *Subjetivo:*'); lineas.push(evol); lineas.push(''); }
+    if (evol) { lineas.push('*Subjetivo:*'); lineas.push(evol); lineas.push(''); }
     blqExpl();
     blqLabs();
     blqDx();
@@ -1192,20 +1229,20 @@ function generarReporte() {
 
   } else if (tipo === 'egreso') {
     encabezado();
-    lineas.push(`✅ *EGRESO / ALTA*`);
+    lineas.push('*EGRESO / ALTA*');
     lineas.push('');
     blqPaciente();
-    if (egMot) { lineas.push(`🏠 *Motivo de egreso:*`); lineas.push(egMot); lineas.push(''); }
+    if (egMot) { lineas.push('*Motivo de egreso:*'); lineas.push(egMot); lineas.push(''); }
     blqSV();
     blqExpl();
-    if (plan) { lineas.push('📌 *Indicaciones al egreso:*'); lineas.push(plan); lineas.push(''); }
+    if (plan) { lineas.push('*Indicaciones al egreso:*'); lineas.push(plan); lineas.push(''); }
 
   } else if (tipo === 'traslado') {
     encabezado();
-    lineas.push(`🚑 *TRASLADO*`);
+    lineas.push('*TRASLADO*');
     lineas.push('');
     blqPaciente();
-    if (egMot) { lineas.push(`📍 *Destino y motivo:*`); lineas.push(egMot); lineas.push(''); }
+    if (egMot) { lineas.push('*Destino y motivo:*'); lineas.push(egMot); lineas.push(''); }
     blqSV();
     blqDx();
     blqExpl();
@@ -1226,8 +1263,9 @@ function generarReporte() {
 
   ultimoReporte = {
     id: Date.now(),
-    fecha, hora, tipo, folio,
+    fecha, hora, horaActivacion: horaAct, tipo, folio,
     paciente: nombre, nss, cama, umf, edad,
+    fum, fpp, antecedentes,
     medico: medicoRep, residente,
     ta: v('f-ta'), fc: v('f-fc'), fr: v('f-fr'), temp: v('f-temp'), sato2: v('f-sato2'),
     diagnosticos: v('f-dx'), exploracion: expl, labs, plan,
@@ -1284,28 +1322,32 @@ async function guardarEnSheets() {
     // Construir params — truncar campos largos para no exceder límite de URL
     const r = ultimoReporte;
     const params = new URLSearchParams({
-      folio:        r.folio || '',
-      fecha:        r.fecha || '',
-      hora:         r.hora || '',
-      tipo:         r.tipo || '',
-      paciente:     r.paciente || '',
-      nss:          r.nss || '',
-      cama:         r.cama || '',
-      umf:          r.umf || '',
-      edad:         r.edad || '',
-      medico:       r.medico || '',
-      residente:    r.residente || '',
-      ta:           r.ta || '',
-      fc:           r.fc || '',
-      fr:           r.fr || '',
-      temp:         r.temp || '',
-      sato2:        r.sato2 || '',
-      diagnosticos: (r.diagnosticos || '').slice(0, 500),
-      exploracion:  (r.exploracion || '').slice(0, 500),
-      labs:         (r.labs || '').slice(0, 400),
-      plan:         (r.plan || '').slice(0, 400),
-      estado:       r.estado || '',
-      reporte:      (r.reporte || '').slice(0, 800)
+      folio:           r.folio || '',
+      fecha:           r.fecha || '',
+      hora:            r.hora || '',
+      horaActivacion:  r.horaActivacion || '',
+      tipo:            r.tipo || '',
+      paciente:        r.paciente || '',
+      nss:             r.nss || '',
+      cama:            r.cama || '',
+      umf:             r.umf || '',
+      edad:            r.edad || '',
+      fum:             r.fum || '',
+      fpp:             r.fpp || '',
+      antecedentes:    (r.antecedentes || '').slice(0, 500),
+      medico:          r.medico || '',
+      residente:       r.residente || '',
+      ta:              r.ta || '',
+      fc:              r.fc || '',
+      fr:              r.fr || '',
+      temp:            r.temp || '',
+      sato2:           r.sato2 || '',
+      diagnosticos:    (r.diagnosticos || '').slice(0, 500),
+      exploracion:     (r.exploracion || '').slice(0, 500),
+      labs:            (r.labs || '').slice(0, 400),
+      plan:            (r.plan || '').slice(0, 400),
+      estado:          r.estado || '',
+      reporte:         (r.reporte || '').slice(0, 800)
     });
 
     // Usar script tag — única técnica que evita CORS con Apps Script doGet
@@ -1424,6 +1466,7 @@ function copiarScript() {
 function nuevoReporte() {
   document.getElementById('resultado-section').classList.add('hidden');
   ['f-nombre','f-nss','f-exp','f-cama','f-umf','f-edad','f-medico','f-residente',
+   'f-fum','f-fpp','f-antecedentes','f-hora-activacion',
    'f-ta','f-fc','f-fr','f-temp','f-sato2',
    'f-dx','f-evolucion','f-exploracion','f-labs','f-plan','f-egreso-motivo']
     .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
