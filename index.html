@@ -944,6 +944,16 @@ function doGet(e) {
       <div style="margin-top:10px; font-size:12px; color:var(--gray-400); text-align:center;" id="cfg-status"></div>
     </div>
 
+    <!-- RESET FOLIO -->
+    <div class="card">
+      <div class="card-title">Reiniciar folio del día</div>
+      <p style="font-size:13px; color:var(--gray-600); margin-bottom:12px;">Usa esto si borraste reportes de Google Sheets y quieres que el folio regrese a 001 para el día de hoy.</p>
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <div style="font-size:13px; color:var(--gray-600);">Folio actual: <strong id="folio-actual" style="color:var(--imss-blue-dark);"></strong></div>
+        <button class="btn btn-secondary" onclick="resetFolio()" style="font-size:13px; padding:8px 16px; color:var(--accent); border-color:#f5c6c6;">🔄 Reiniciar a 001</button>
+      </div>
+    </div>
+
     </div><!-- /config-content -->
 
   </div><!-- /panel-config -->
@@ -981,6 +991,21 @@ function confirmarFolio() {
 
 function mostrarFolioPendiente() {
   document.getElementById('f-folio').value = peekFolio();
+}
+
+function resetFolio() {
+  if (!confirm('¿Reiniciar el folio del día a 001?')) return;
+  const d = new Date();
+  const fechaKey = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  localStorage.removeItem(`eri_folio_${fechaKey}`);
+  mostrarFolioPendiente();
+  actualizarFolioConfig();
+  toast('🔄 Folio reiniciado a 001', 'info');
+}
+
+function actualizarFolioConfig() {
+  const el = document.getElementById('folio-actual');
+  if (el) el.textContent = peekFolio();
 }
 
 // ===================== INIT =====================
@@ -1052,6 +1077,7 @@ async function verificarPassword() {
     document.getElementById('config-lock').classList.add('hidden');
     document.getElementById('config-content').classList.remove('hidden');
     document.getElementById('lock-error').textContent = '';
+    actualizarFolioConfig();
   } else {
     document.getElementById('lock-error').textContent = '❌ Contraseña incorrecta';
     document.getElementById('lock-pwd').value = '';
